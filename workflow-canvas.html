@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Workflow Canvas</title>
+    <style>
+        /* ============================================
+           CSS VARIABLES & THEME SYSTEM
+           ============================================ */
+        :root {
+            /* Light Theme Defaults - Material 3 */
+            --md-sys-color-primary: #6750A4;
+            --md-sys-color-on-primary: #FFFFFF;
+            --md-sys-color-primary-container: #EADDFF;
+            --md-sys-color-on-primary-container: #21005D;
+            --md-sys-color-secondary: #625B71;
+            --md-sys-color-on-secondary: #FFFFFF;
+            --md-sys-color-secondary-container: #E8DEF8;
+            --md-sys-color-on-secondary-container: #1D192B;
+            --md-sys-color-tertiary: #7D5260;
+            --md-sys-color-on-tertiary: #FFFFFF;
+            --md-sys-color-background: #FEF7FF;
+            --md-sys-color-on-background: #1D1B20;
+            --md-sys-color-surface: #FEF7FF;
+            --md-sys-color-on-surface: #1D1B20;
+            --md-sys-color-surface-variant: #E7E0EC;
+            --md-sys-color-on-surface-variant: #49454F;
+            --md-sys-color-outline: #79747E;
+            --md-sys-color-error: #B3261E;
+            
+            /* Elevation & Shadows */
+            --md-sys-elevation-1: 0px 1px 2px rgba(0,0,0,0.1), 0px 1px 3px 1px rgba(0,0,0,0.05);
+            --md-sys-elevation-2: 0px 1px 2px rgba(0,0,0,0.15), 0px 2px 6px 2px rgba(0,0,0,0.05);
+            --md-sys-elevation-3: 0px 4px 8px 3px rgba(0,0,0,0.15), 0px 1px 3px rgba(0,0,0,0.3);
+            
+            /* Glassmorphism */
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.5);
+            --glass-blur: 20px;
+            
+            /* Typography */
+            --font-family: 'Google Sans', 'Roboto', sans-serif;
+            
+            /* Motion */
+            --motion-short: 150ms;
+            --motion-medium: 300ms;
+            --motion-easing: cubic-bezier(0.2, 0.0, 0, 1.0);
+            
+            /* Sizing */
+            --grid-size: 20px;
+        }
+
+        [data-theme="dark"] {
+            --md-sys-color-primary: #D0BCFF;
+            --md-sys-color-on-primary: #381E72;
+            --md-sys-color-primary-container: #4F378B;
+            --md-sys-color-on-primary-container: #EADDFF;
+            --md-sys-color-secondary: #CCC2DC;
+            --md-sys-color-on-secondary: #332D41;
+            --md-sys-color-secondary-container: #4A4458;
+            --md-sys-color-on-secondary-container: #E8DEF8;
+            --md-sys-color-tertiary: #EFB8C8;
+            --md-sys-color-on-tertiary: #492532;
+            --md-sys-color-background: #141218;
+            --md-sys-color-on-background: #E6E1E5;
+            --md-sys-color-surface: #141218;
+            --md-sys-color-on-surface: #E6E1E5;
+            --md-sys-color-surface-variant: #49454F;
+            --md-sys-color-on-surface-variant: #CAC4D0;
+            --md-sys-color-outline: #938F99;
+            
+            --glass-bg: rgba(30, 30, 30, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-family);
+            background: var(--md-sys-color-background);
+            color: var(--md-sys-color-on-background);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            transition: background var(--motion-medium) var(--motion-easing);
+        }
+
+        /* Loading Screen */
+        #loading-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--md-sys-color-background);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            transition: opacity var(--motion-medium) ease;
+        }
+
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--md-sys-color-surface-variant);
+            border-top-color: var(--md-sys-color-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-text { margin-top: 24px; font-size: 1.25rem; }
+
+        .loading-progress {
+            width: 200px;
+            height: 4px;
+            background: var(--md-sys-color-surface-variant);
+            border-radius: 2px;
+            margin-top: 16px;
+            overflow: hidden;
+        }
+
+        .loading-progress-bar {
+            height: 100%;
+            background: var(--md-sys-color-primary);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        /* Canvas */
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+            cursor: grab;
+        }
+
+        #canvas-container.panning { cursor: grabbing; }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: 0 0;
+        }
+
+        .grid-pattern {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background-image: 
+                linear-gradient(var(--md-sys-color-outline) 1px, transparent 1px),
+                linear-gradient(90deg, var(--md-sys-color-outline) 1px, transparent 1px);
+            background-size: var(--grid-size) var(--grid-size);
+            opacity: 0.1;
+        }
+
+        /* Nodes */
+        .node {
+            position: absolute;
+            min-width: 150px;
+            min-height: 80px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            box-shadow: var(--md-sys-elevation-2);
+            display: flex;
+            flex-direction: column;
+            transition: box-shadow var(--motion-short) ease;
+            user-select: none;
+        }
+
+        .node:hover { box-shadow: var(--md-sys-elevation-3); }
+
+        .node.selected {
+            border: 2px solid var(--md-sys-color-primary);
+            box-shadow: 0 0 0 4px var(--md-sys-color-primary-container);
+        }
+
+        .node-header {
+            padding: 12px 16px;
+            background: var(--md-sys-color-primary-container);
+            color: var(--md-sys-color-on-primary-container);
+            border-radius: 12px 12px 0 0;
+            font-weight: 500;
+            cursor: move;
+        }
+
+        .node-content {
+            padding: 16px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .node-type-process .node-header { background: #C6F6D5; color: #22543D; }
+        .node-type-decision .node-header { background: #FEEBC8; color: #744210; }
+        .node-type-io .node-header { background: #BEE3F8; color: #2C5282; }
+        .node-type-note .node-header { background: #E9D8FD; color: #44337A; }
+        .node-type-group .node-header { background: #FED7E2; color: #831843; }
+
+        /* Connection Points */
+        .connection-point {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: var(--md-sys-color-outline);
+            border: 2px solid var(--md-sys-color-surface);
+            border-radius: 50%;
+            cursor: crosshair;
+            transition: transform var(--motion-short) ease, background var(--motion-short) ease;
+        }
+
+        .connection-point:hover {
+            transform: scale(1.3);
+            background: var(--md-sys-color-primary);
+        }
+
+        .connection-point.input { top: 50%; left: -6px; transform: translateY(-50%); }
+        .connection-point.output { top: 50%; right: -6px; transform: translateY(-50%); }
+        .connection-point.top { top: -6px; left: 50%; transform: translateX(-50%); }
+        .connection-point.bottom { bottom: -6px; left: 50%; transform: translateX(-50%); }
+
+        /* Connections */
+        #connections-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: visible;
+        }
+
+        .connection-line {
+            fill: none;
+            stroke: var(--md-sys-color-outline);
+            stroke-width: 2;
+            stroke-linecap: round;
+            transition: stroke var(--motion-short) ease;
+        }
+
+        .connection-line:hover {
+            stroke: var(--md-sys-color-primary);
+            stroke-width: 3;
+            cursor: pointer;
+            pointer-events: stroke;
+        }
+
+        .connection-line.selected {
+            stroke: var(--md-sys-color-primary);
+            stroke-dasharray: 5, 5;
+            animation: dashAnimation 1s linear infinite;
+        }
+
+        @keyframes dashAnimation { to { stroke-dashoffset: -10; } }
+
+        /* Toolbars */
+        .toolbar {
+            position: fixed;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 8px;
+            display: flex;
+            gap: 8px;
+            box-shadow: var(--md-sys-elevation-2);
+            z-index: 100;
+        }
+
+        .toolbar-vertical { flex-direction: column; }
+
+        .btn {
+            min-width: 40px;
+            min-height: 40px;
+            border: none;
+            border-radius: 12px;
+            background: transparent;
+            color: var(--md-sys-color-on-surface);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background var(--motion-short) ease, transform var(--motion-short) ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn:hover { background: var(--md-sys-color-surface-variant); }
+        .btn:active { transform: scale(0.95); }
+
+        .btn-primary {
+            background: var(--md-sys-color-primary);
+            color: var(--md-sys-color-on-primary);
+        }
+
+        /* Ripple Effect */
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(0);
+            animation: ripple-animation 0.6s ease-out;
+            pointer-events: none;
+        }
+
+        @keyframes ripple-animation {
+            to { transform: scale(4); opacity: 0; }
+        }
+
+        /* Toolbar Positions */
+        #top-toolbar { top: 16px; left: 50%; transform: translateX(-50%); }
+        #left-sidebar { top: 80px; left: 16px; }
+        #right-panel { top: 80px; right: 16px; flex-direction: column; min-width: 280px; padding: 16px; }
+        #bottom-bar { bottom: 16px; left: 50%; transform: translateX(-50%); }
+        #zoom-controls { bottom: 16px; right: 16px; }
+
+        /* Mini Map */
+        #minimap-container {
+            position: fixed;
+            bottom: 80px;
+            right: 16px;
+            width: 200px;
+            height: 150px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            box-shadow: var(--md-sys-elevation-2);
+            overflow: hidden;
+            z-index: 100;
+        }
+
+        #minimap { width: 100%; height: 100%; }
+
+        #minimap-viewport {
+            position: absolute;
+            border: 2px solid var(--md-sys-color-primary);
+            background: rgba(103, 80, 164, 0.1);
+            pointer-events: none;
+        }
+
+        /* Context Menu */
+        #context-menu {
+            position: fixed;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 8px 0;
+            box-shadow: var(--md-sys-elevation-3);
+            z-index: 1000;
+            display: none;
+            min-width: 200px;
+        }
+
+        .context-menu-item {
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: background var(--motion-short) ease;
+        }
+
+        .context-menu-item:hover { background: var(--md-sys-color-surface-variant); }
+        .context-menu-divider { height: 1px; background: var(--md-sys-color-outline); margin: 8px 0; opacity: 0.3; }
+
+        /* Command Palette */
+        #command-palette {
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            width: 600px;
+            max-height: 400px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            box-shadow: var(--md-sys-elevation-3);
+            z-index: 1001;
+            display: none;
+            flex-direction: column;
+            opacity: 0;
+            transition: opacity var(--motion-short) ease, transform var(--motion-short) ease;
+        }
+
+        #command-palette.visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        #command-input {
+            width: 100%;
+            padding: 16px 20px;
+            border: none;
+            border-radius: 16px 16px 0 0;
+            background: transparent;
+            color: var(--md-sys-color-on-surface);
+            font-size: 1rem;
+            outline: none;
+        }
+
+        #command-results { flex: 1; overflow-y: auto; padding: 8px 0; }
+
+        .command-result-item {
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: background var(--motion-short) ease;
+        }
+
+        .command-result-item:hover, .command-result-item.selected {
+            background: var(--md-sys-color-surface-variant);
+        }
+
+        .command-shortcut {
+            margin-left: auto;
+            font-size: 0.75rem;
+            color: var(--md-sys-color-outline);
+            background: var(--md-sys-color-surface-variant);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        /* Property Panel */
+        .property-section { margin-bottom: 24px; }
+
+        .property-section-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--md-sys-color-outline);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .property-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .property-label { font-size: 0.875rem; color: var(--md-sys-color-on-surface); }
+
+        .property-input {
+            width: 100px;
+            padding: 8px;
+            border: 1px solid var(--md-sys-color-outline);
+            border-radius: 8px;
+            background: var(--md-sys-color-surface);
+            color: var(--md-sys-color-on-surface);
+            font-size: 0.875rem;
+        }
+
+        .color-picker {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        /* Toast Notifications */
+        #toast-container {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1002;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .toast {
+            background: #313033;
+            color: #F4EFF4;
+            padding: 14px 24px;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            box-shadow: var(--md-sys-elevation-3);
+            animation: toast-in 0.3s ease;
+        }
+
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Icons */
+        .icon { width: 24px; height: 24px; fill: currentColor; }
+
+        /* Resize Handles */
+        .resize-handle {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: var(--md-sys-color-primary);
+            border: 2px solid var(--md-sys-color-surface);
+            border-radius: 50%;
+            cursor: se-resize;
+            opacity: 0;
+            transition: opacity var(--motion-short) ease;
+        }
+
+        .node.selected .resize-handle { opacity: 1; }
+        .resize-handle.se { bottom: -6px; right: -6px; }
+        .resize-handle.sw { bottom: -6px; left: -6px; cursor: sw-resize; }
+        .resize-handle.ne { top: -6px; right: -6px; cursor: ne-resize; }
+        .resize-handle.nw { top: -6px; left: -6px; cursor: nw-resize; }
+
+        /* Text Editor */
+        .text-editor {
+            width: 100%;
+            min-height: 60px;
+            border: none;
+            background: transparent;
+            color: var(--md-sys-color-on-surface);
+            font-size: 0.875rem;
+            resize: vertical;
+            outline: none;
+            font-family: inherit;
+        }
+
+        /* Image Container */
+        .image-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            border-radius: 8px;
+        }
+
+        .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--md-sys-color-surface-variant); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--md-sys-color-outline); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--md-sys-color-on-surface-variant); }
+
+        /* Easter Egg */
+        .konami-active { animation: rainbow 2s ease infinite; }
+        @keyframes rainbow { 0%, 100% { filter: hue-rotate(0deg); } 50% { filter: hue-rotate(180deg); } }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading Workflow Canvas</div>
+        <div class="loading-progress">
+            <div class="loading-progress-bar" id="loading-progress-bar"></div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app">
+        <!-- Canvas -->
+        <div id="canvas-container">
+            <div class="grid-pattern" id="grid-pattern"></div>
+            <svg id="connections-layer"></svg>
+            <div id="canvas"></div>
+        </div>
+
+        <!-- Top Toolbar -->
+        <div class="toolbar" id="top-toolbar">
+            <button class="btn" id="btn-new" title="New (Ctrl+N)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            </button>
+            <button class="btn" id="btn-save" title="Save (Ctrl+S)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+            </button>
+            <button class="btn" id="btn-export" title="Export (Ctrl+E)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            </button>
+            <button class="btn" id="btn-import" title="Import (Ctrl+I)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+            </button>
+            <div style="width:1px;background:var(--md-sys-color-outline);margin:0 8px;"></div>
+            <button class="btn" id="btn-undo" title="Undo (Ctrl+Z)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+            </button>
+            <button class="btn" id="btn-redo" title="Redo (Ctrl+Y)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M18.4 10.6C16.55 9 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg>
+            </button>
+            <div style="width:1px;background:var(--md-sys-color-outline);margin:0 8px;"></div>
+            <button class="btn" id="btn-zoom-in" title="Zoom In">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zM12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/></svg>
+            </button>
+            <button class="btn" id="btn-zoom-out" title="Zoom Out">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zM7 9h5v1H7z"/></svg>
+            </button>
+            <button class="btn" id="btn-zoom-fit" title="Fit (Ctrl+0)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M15 3l2.3 2.3-2.89 2.87 1.42 1.42L18.7 6.7 21 9V3zM3 9l2.3-2.3 2.87 2.89 1.42-1.42L6.7 5.3 9 3H3zm6 12l-2.3-2.3 2.89-2.87-1.42-1.42L5.3 17.3 3 15v6zm12-6l-2.3 2.3-2.87-2.89-1.42 1.42 2.89 2.87L15 21h6z"/></svg>
+            </button>
+            <div style="width:1px;background:var(--md-sys-color-outline);margin:0 8px;"></div>
+            <button class="btn" id="btn-theme" title="Toggle Theme (Ctrl+D)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
+            </button>
+            <button class="btn" id="btn-help" title="Help">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
+            </button>
+        </div>
+
+        <!-- Left Sidebar - Node Types -->
+        <div class="toolbar toolbar-vertical" id="left-sidebar">
+            <button class="btn node-type-btn" data-type="process" title="Process (P)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M4 8h16v8H4z"/></svg>
+            </button>
+            <button class="btn node-type-btn" data-type="decision" title="Decision (D)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 2L2 12l10 10 10-10z"/></svg>
+            </button>
+            <button class="btn node-type-btn" data-type="io" title="Input/Output">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="M2 10h2v4H2z"/><path d="M20 10h2v4h-2z"/></svg>
+            </button>
+            <button class="btn node-type-btn" data-type="note" title="Note (N)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+            </button>
+            <button class="btn node-type-btn" data-type="group" title="Group">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/><path d="M7 7h10v10H7z"/></svg>
+            </button>
+            <button class="btn" id="btn-add-image" title="Add Image (I)">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+            </button>
+            <button class="btn" id="btn-add-text" title="Add Text">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M5 4v3h5v12h3V7h5V4H5z"/></svg>
+            </button>
+        </div>
+
+        <!-- Right Panel - Properties -->
+        <div class="toolbar" id="right-panel">
+            <div class="property-section">
+                <div class="property-section-title">Appearance</div>
+                <div class="property-row">
+                    <span class="property-label">Background</span>
+                    <input type="color" class="color-picker" id="prop-bg-color" value="#ffffff">
+                </div>
+                <div class="property-row">
+                    <span class="property-label">Opacity</span>
+                    <input type="range" class="property-input" id="prop-opacity" min="0" max="100" value="100">
+                </div>
+                <div class="property-row">
+                    <span class="property-label">Radius</span>
+                    <input type="number" class="property-input" id="prop-radius" min="0" max="50" value="12">
+                </div>
+            </div>
+            <div class="property-section">
+                <div class="property-section-title">Text</div>
+                <div class="property-row">
+                    <span class="property-label">Font Size</span>
+                    <input type="number" class="property-input" id="prop-font-size" min="8" max="72" value="14">
+                </div>
+                <div class="property-row">
+                    <span class="property-label">Color</span>
+                    <input type="color" class="color-picker" id="prop-text-color" value="#000000">
+                </div>
+            </div>
+            <div class="property-section">
+                <div class="property-section-title">Actions</div>
+                <button class="btn btn-primary" id="btn-delete" style="width:100%">Delete Selected</button>
+            </div>
+        </div>
+
+        <!-- Bottom Bar -->
+        <div class="toolbar" id="bottom-bar">
+            <span id="status-text" style="padding:0 12px;font-size:0.875rem">Ready</span>
+            <span style="width:1px;background:var(--md-sys-color-outline);margin:0 8px"></span>
+            <span id="selection-count" style="font-size:0.875rem">0 selected</span>
+            <span style="width:1px;background:var(--md-sys-color-outline);margin:0 8px"></span>
+            <span id="zoom-level" style="font-size:0.875rem">100%</span>
+        </div>
+
+        <!-- Zoom Controls -->
+        <div class="toolbar toolbar-vertical" id="zoom-controls">
+            <button class="btn" id="zoom-plus">+</button>
+            <button class="btn" id="zoom-minus">−</button>
+            <button class="btn" id="zoom-reset">100%</button>
+        </div>
+
+        <!-- Mini Map -->
+        <div id="minimap-container">
+            <svg id="minimap"></svg>
+            <div id="minimap-viewport"></div>
+        </div>
+
+        <!-- Context Menu -->
+        <div id="context-menu">
+            <div class="context-menu-item" data-action="duplicate">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                Duplicate
+            </div>
+            <div class="context-menu-item" data-action="delete">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                Delete
+            </div>
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item" data-action="bring-front">Bring to Front</div>
+            <div class="context-menu-item" data-action="send-back">Send to Back</div>
+        </div>
+
+        <!-- Command Palette -->
+        <div id="command-palette">
+            <input type="text" id="command-input" placeholder="Type a command... (Ctrl+K)">
+            <div id="command-results"></div>
+        </div>
+
+        <!-- Toast Container -->
+        <div id="toast-container"></div>
+
+        <!-- Hidden File Input -->
+        <input type="file" id="file-input" accept=".json,image/*" style="display:none">
+    </div>
+
+    <script>
+        // Application State
+        const AppState = {
+            nodes: [],
+            connections: [],
+            selectedNodes: new Set(),
+            selectedConnections: new Set(),
+            zoom: 1,
+            panX: 0,
+            panY: 0,
+            isPanning: false,
+            lastMouseX: 0,
+            lastMouseY: 0,
+            history: [],
+            historyIndex: -1,
+            theme: 'light',
+            gridSize: 20,
+            snapToGrid: true,
+            showGrid: true
+        };
+
+        // Konami Code Easter Egg
+        const konamiCode = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+        let konamiIndex = 0;
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === konamiCode[konamiIndex]) {
+                konamiIndex++;
+                if (konamiIndex === konamiCode.length) {
+                    document.body.classList.add('konami-active');
+                    showToast('🎉 Easter Egg Activated!');
+                    konamiIndex = 0;
+                }
+            } else {
+                konamiIndex = 0;
+            }
+        });
+
+        // Utilities
+        function generateId() { return 'id_' + Math.random().toString(36).substr(2, 9); }
+        function snapToGrid(value) { return AppState.snapToGrid ? Math.round(value / AppState.gridSize) * AppState.gridSize : value; }
+
+        function saveState() {
+            if (AppState.historyIndex < AppState.history.length - 1) {
+                AppState.history = AppState.history.slice(0, AppState.historyIndex + 1);
+            }
+            AppState.history.push({
+                nodes: JSON.parse(JSON.stringify(AppState.nodes)),
+                connections: JSON.parse(JSON.stringify(AppState.connections)),
+                zoom: AppState.zoom, panX: AppState.panX, panY: AppState.panY
+            });
+            if (AppState.history.length > 50) AppState.history.shift();
+            else AppState.historyIndex++;
+            autoSave();
+        }
+
+        function undo() {
+            if (AppState.historyIndex > 0) {
+                AppState.historyIndex--;
+                const state = AppState.history[AppState.historyIndex];
+                AppState.nodes = JSON.parse(JSON.stringify(state.nodes));
+                AppState.connections = JSON.parse(JSON.stringify(state.connections));
+                AppState.zoom = state.zoom; AppState.panX = state.panX; AppState.panY = state.panY;
+                renderCanvas(); updateMinimap(); showToast('Undo');
+            }
+        }
+
+        function redo() {
+            if (AppState.historyIndex < AppState.history.length - 1) {
+                AppState.historyIndex++;
+                const state = AppState.history[AppState.historyIndex];
+                AppState.nodes = JSON.parse(JSON.stringify(state.nodes));
+                AppState.connections = JSON.parse(JSON.stringify(state.connections));
+                AppState.zoom = state.zoom; AppState.panX = state.panX; AppState.panY = state.panY;
+                renderCanvas(); updateMinimap(); showToast('Redo');
+            }
+        }
+
+        function autoSave() {
+            localStorage.setItem('workflow_canvas_data', JSON.stringify({
+                nodes: AppState.nodes, connections: AppState.connections,
+                zoom: AppState.zoom, panX: AppState.panX, panY: AppState.panY,
+                theme: AppState.theme
+            }));
+        }
+
+        function loadState() {
+            const saved = localStorage.getItem('workflow_canvas_data');
+            if (saved) {
+                const data = JSON.parse(saved);
+                AppState.nodes = data.nodes || [];
+                AppState.connections = data.connections || [];
+                AppState.zoom = data.zoom || 1;
+                AppState.panX = data.panX || 0;
+                AppState.panY = data.panY || 0;
+                if (data.theme) setTheme(data.theme);
+                AppState.history = [{ nodes: JSON.parse(JSON.stringify(AppState.nodes)), connections: JSON.parse(JSON.stringify(AppState.connections)), zoom: AppState.zoom, panX: AppState.panX, panY: AppState.panY }];
+                AppState.historyIndex = 0;
+            } else {
+                AppState.history = [{ nodes: [], connections: [], zoom: 1, panX: 0, panY: 0 }];
+                AppState.historyIndex = 0;
+            }
+        }
+
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast'; toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(20px)'; setTimeout(() => toast.remove(), 300); }, 2000);
+        }
+
+        // Theme System
+        function setTheme(theme) {
+            AppState.theme = theme;
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('workflow_canvas_theme', theme);
+        }
+
+        function toggleTheme() { setTheme(AppState.theme === 'light' ? 'dark' : 'light'); }
+
+        // Node Management
+        function createNode(type, x, y, data = {}) {
+            const node = {
+                id: generateId(), type, x: snapToGrid(x), y: snapToGrid(y),
+                width: data.width || 200, height: data.height || 100,
+                title: data.title || getDefaultTitle(type), content: data.content || '',
+                backgroundColor: data.backgroundColor || null, textColor: data.textColor || null,
+                opacity: data.opacity || 100, borderRadius: data.borderRadius || 12,
+                fontSize: data.fontSize || 14, zIndex: getMaxZIndex() + 1, rotation: 0, parentId: null
+            };
+            AppState.nodes.push(node); saveState(); renderCanvas(); updateMinimap(); return node;
+        }
+
+        function getDefaultTitle(type) {
+            return { process: 'Process', decision: 'Decision', io: 'Input/Output', note: 'Note', group: 'Group', image: 'Image', text: 'Text' }[type] || 'Node';
+        }
+
+        function getMaxZIndex() { return AppState.nodes.reduce((max, node) => Math.max(max, node.zIndex || 0), 0); }
+
+        function deleteNode(nodeId) {
+            const index = AppState.nodes.findIndex(n => n.id === nodeId);
+            if (index !== -1) {
+                AppState.connections = AppState.connections.filter(c => c.from !== nodeId && c.to !== nodeId);
+                AppState.nodes.splice(index, 1); AppState.selectedNodes.delete(nodeId);
+                saveState(); renderCanvas(); updateMinimap();
+            }
+        }
+
+        function duplicateNode(nodeId) {
+            const node = AppState.nodes.find(n => n.id === nodeId);
+            if (node) {
+                const newNode = { ...JSON.parse(JSON.stringify(node)), id: generateId(), x: node.x + 30, y: node.y + 30, zIndex: getMaxZIndex() + 1 };
+                AppState.nodes.push(newNode); saveState(); renderCanvas(); updateMinimap();
+            }
+        }
+
+        // Connection Management
+        function createConnection(fromNodeId, fromPoint, toNodeId, toPoint) {
+            const exists = AppState.connections.some(c => c.from === fromNodeId && c.to === toNodeId);
+            if (!exists && fromNodeId !== toNodeId) {
+                AppState.connections.push({ id: generateId(), from: fromNodeId, fromPoint, to: toNodeId, toPoint, type: 'curved' });
+                saveState(); renderCanvas();
+            }
+        }
+
+        function deleteConnection(connectionId) {
+            const index = AppState.connections.findIndex(c => c.id === connectionId);
+            if (index !== -1) {
+                AppState.connections.splice(index, 1); AppState.selectedConnections.delete(connectionId);
+                saveState(); renderCanvas();
+            }
+        }
+
+        // Rendering
+        function renderCanvas() {
+            const canvas = document.getElementById('canvas');
+            const connectionsLayer = document.getElementById('connections-layer');
+            const gridPattern = document.getElementById('grid-pattern');
+            
+            canvas.innerHTML = ''; connectionsLayer.innerHTML = '';
+            gridPattern.style.display = AppState.showGrid ? 'block' : 'none';
+            
+            canvas.style.transform = `translate(${AppState.panX}px, ${AppState.panY}px) scale(${AppState.zoom})`;
+            connectionsLayer.style.transform = `translate(${AppState.panX}px, ${AppState.panY}px) scale(${AppState.zoom})`;
+            
+            // Render connections
+            AppState.connections.forEach(conn => {
+                const fromNode = AppState.nodes.find(n => n.id === conn.from);
+                const toNode = AppState.nodes.find(n => n.id === conn.to);
+                if (fromNode && toNode) {
+                    const fromPos = getConnectionPointPosition(fromNode, conn.fromPoint);
+                    const toPos = getConnectionPointPosition(toNode, conn.toPoint);
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('d', createCurvedPath(fromPos, toPos));
+                    path.setAttribute('class', `connection-line ${AppState.selectedConnections.has(conn.id) ? 'selected' : ''}`);
+                    path.dataset.connectionId = conn.id;
+                    path.addEventListener('click', (e) => { e.stopPropagation(); selectConnection(conn.id, e.ctrlKey || e.metaKey); });
+                    connectionsLayer.appendChild(path);
+                }
+            });
+            
+            // Render nodes
+            AppState.nodes.forEach(node => {
+                const nodeEl = document.createElement('div');
+                nodeEl.className = `node node-type-${node.type} ${AppState.selectedNodes.has(node.id) ? 'selected' : ''}`;
+                nodeEl.dataset.nodeId = node.id;
+                nodeEl.style.left = `${node.x}px`; nodeEl.style.top = `${node.y}px`;
+                nodeEl.style.width = `${node.width}px`; nodeEl.style.height = `${node.height}px`;
+                nodeEl.style.zIndex = node.zIndex; nodeEl.style.transform = `rotate(${node.rotation}deg)`;
+                
+                if (node.backgroundColor) nodeEl.style.background = node.backgroundColor;
+                if (node.opacity) nodeEl.style.opacity = node.opacity / 100;
+                if (node.borderRadius) nodeEl.style.borderRadius = `${node.borderRadius}px`;
+                
+                const header = document.createElement('div');
+                header.className = 'node-header';
+                header.innerHTML = `<span>${node.title}</span>`;
+                header.addEventListener('mousedown', (e) => startNodeDrag(e, node.id));
+                nodeEl.appendChild(header);
+                
+                const content = document.createElement('div');
+                content.className = 'node-content';
+                
+                if (node.type === 'text' || node.type === 'note') {
+                    const textarea = document.createElement('textarea');
+                    textarea.className = 'text-editor'; textarea.value = node.content;
+                    textarea.style.fontSize = `${node.fontSize}px`;
+                    if (node.textColor) textarea.style.color = node.textColor;
+                    textarea.addEventListener('input', (e) => { node.content = e.target.value; saveState(); });
+                    content.appendChild(textarea);
+                } else if (node.type === 'image') {
+                    const imgContainer = document.createElement('div');
+                    imgContainer.className = 'image-container';
+                    const img = document.createElement('img'); img.src = node.content;
+                    imgContainer.appendChild(img); content.appendChild(imgContainer);
+                } else if (node.content) {
+                    const text = document.createElement('div');
+                    text.textContent = node.content; text.style.fontSize = `${node.fontSize}px`;
+                    if (node.textColor) text.style.color = node.textColor;
+                    content.appendChild(text);
+                }
+                nodeEl.appendChild(content);
+                
+                ['input', 'output', 'top', 'bottom'].forEach(point => {
+                    const cp = document.createElement('div');
+                    cp.className = `connection-point ${point}`; cp.dataset.point = point;
+                    cp.addEventListener('mousedown', (e) => startConnection(e, node.id, point));
+                    nodeEl.appendChild(cp);
+                });
+                
+                if (AppState.selectedNodes.has(node.id)) {
+                    ['se', 'sw', 'ne', 'nw'].forEach(handle => {
+                        const resizeHandle = document.createElement('div');
+                        resizeHandle.className = `resize-handle ${handle}`;
+                        resizeHandle.addEventListener('mousedown', (e) => startResize(e, node.id, handle));
+                        nodeEl.appendChild(resizeHandle);
+                    });
+                }
+                
+                nodeEl.addEventListener('click', (e) => { e.stopPropagation(); selectNode(node.id, e.ctrlKey || e.metaKey); });
+                nodeEl.addEventListener('contextmenu', (e) => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, 'node', node.id); });
+                canvas.appendChild(nodeEl);
+            });
+            
+            updateStatus();
+        }
+
+        function getConnectionPointPosition(node, point) {
+            const positions = {
+                input: { x: node.x, y: node.y + node.height / 2 },
+                output: { x: node.x + node.width, y: node.y + node.height / 2 },
+                top: { x: node.x + node.width / 2, y: node.y },
+                bottom: { x: node.x + node.width / 2, y: node.y + node.height }
+            };
+            return positions[point] || positions.output;
+        }
+
+        function createCurvedPath(from, to) {
+            const dx = Math.abs(to.x - from.x) * 0.5;
+            const dy = Math.abs(to.y - from.y) * 0.5;
+            const controlOffset = Math.max(dx, dy, 50);
+            return `M ${from.x} ${from.y} C ${from.x + controlOffset} ${from.y}, ${to.x - controlOffset} ${to.y}, ${to.x} ${to.y}`;
+        }
+
+        function updateMinimap() {
+            const minimap = document.getElementById('minimap');
+            const viewport = document.getElementById('minimap-viewport');
+            minimap.innerHTML = '';
+            if (AppState.nodes.length === 0) return;
+            
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            AppState.nodes.forEach(node => {
+                minX = Math.min(minX, node.x); minY = Math.min(minY, node.y);
+                maxX = Math.max(maxX, node.x + node.width); maxY = Math.max(maxY, node.y + node.height);
+            });
+            
+            const padding = 50;
+            minX -= padding; minY -= padding; maxX += padding; maxY += padding;
+            const contentWidth = maxX - minX, contentHeight = maxY - minY;
+            const scale = Math.min(200 / contentWidth, 150 / contentHeight);
+            
+            AppState.nodes.forEach(node => {
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', (node.x - minX) * scale);
+                rect.setAttribute('y', (node.y - minY) * scale);
+                rect.setAttribute('width', node.width * scale);
+                rect.setAttribute('height', node.height * scale);
+                rect.setAttribute('fill', node.type === 'process' ? '#C6F6D5' : node.type === 'decision' ? '#FEEBC8' : node.type === 'io' ? '#BEE3F8' : node.type === 'note' ? '#E9D8FD' : '#FED7E2');
+                rect.setAttribute('rx', '2');
+                minimap.appendChild(rect);
+            });
+            
+            const containerWidth = document.getElementById('canvas-container').clientWidth;
+            const containerHeight = document.getElementById('canvas-container').clientHeight;
+            viewport.style.width = (containerWidth / AppState.zoom * scale) + 'px';
+            viewport.style.height = (containerHeight / AppState.zoom * scale) + 'px';
+            viewport.style.left = ((-AppState.panX / AppState.zoom) * scale) + 'px';
+            viewport.style.top = ((-AppState.panY / AppState.zoom) * scale) + 'px';
+        }
+
+        function updateStatus() {
+            document.getElementById('selection-count').textContent = `${AppState.selectedNodes.size + AppState.selectedConnections.size} selected`;
+            document.getElementById('zoom-level').textContent = `${Math.round(AppState.zoom * 100)}%`;
+        }
+
+        // Interaction Handlers
+        function selectNode(nodeId, multiSelect = false) {
+            if (!multiSelect) { AppState.selectedNodes.clear(); AppState.selectedConnections.clear(); }
+            if (AppState.selectedNodes.has(nodeId)) AppState.selectedNodes.delete(nodeId);
+            else AppState.selectedNodes.add(nodeId);
+            renderCanvas(); updatePropertiesPanel();
+        }
+
+        function selectConnection(connectionId, multiSelect = false) {
+            if (!multiSelect) { AppState.selectedNodes.clear(); AppState.selectedConnections.clear(); }
+            if (AppState.selectedConnections.has(connectionId)) AppState.selectedConnections.delete(connectionId);
+            else AppState.selectedConnections.add(connectionId);
+            renderCanvas();
+        }
+
+        function startNodeDrag(e, nodeId) {
+            if (e.button !== 0) return;
+            const node = AppState.nodes.find(n => n.id === nodeId);
+            if (!node) return;
+            
+            const startX = e.clientX, startY = e.clientY;
+            const nodeStartX = node.x, nodeStartY = node.y;
+            
+            if (!AppState.selectedNodes.has(nodeId)) {
+                if (!e.ctrlKey && !e.metaKey) AppState.selectedNodes.clear();
+                AppState.selectedNodes.add(nodeId); renderCanvas();
+            }
+            
+            function onMouseMove(e) {
+                const dx = (e.clientX - startX) / AppState.zoom;
+                const dy = (e.clientY - startY) / AppState.zoom;
+                AppState.selectedNodes.forEach(id => {
+                    const n = AppState.nodes.find(node => node.id === id);
+                    if (n) { n.x = snapToGrid(nodeStartX + dx); n.y = snapToGrid(nodeStartY + dy); }
+                });
+                renderCanvas(); updateMinimap();
+            }
+            
+            function onMouseUp() {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                saveState();
+            }
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        }
+
+        function startResize(e, nodeId, handle) {
+            e.stopPropagation();
+            const node = AppState.nodes.find(n => n.id === nodeId);
+            if (!node) return;
+            
+            const startX = e.clientX, startY = e.clientY;
+            const startWidth = node.width, startHeight = node.height;
+            const startXPos = node.x, startYPos = node.y;
+            
+            function onMouseMove(e) {
+                const dx = (e.clientX - startX) / AppState.zoom;
+                const dy = (e.clientY - startY) / AppState.zoom;
+                if (handle.includes('e')) node.width = Math.max(100, startWidth + dx);
+                if (handle.includes('w')) { node.width = Math.max(100, startWidth - dx); node.x = startXPos + dx; }
+                if (handle.includes('s')) node.height = Math.max(60, startHeight + dy);
+                if (handle.includes('n')) { node.height = Math.max(60, startHeight - dy); node.y = startYPos + dy; }
+                renderCanvas();
+            }
+            
+            function onMouseUp() {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                saveState();
+            }
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        }
+
+        let connectionStart = null, tempConnectionLine = null;
+
+        function startConnection(e, nodeId, point) {
+            e.stopPropagation();
+            const node = AppState.nodes.find(n => n.id === nodeId);
+            if (!node) return;
+            
+            connectionStart = { nodeId, point };
+            const startPos = getConnectionPointPosition(node, point);
+            
+            tempConnectionLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            tempConnectionLine.setAttribute('class', 'connection-line');
+            tempConnectionLine.setAttribute('stroke-dasharray', '5, 5');
+            document.getElementById('connections-layer').appendChild(tempConnectionLine);
+            
+            function onMouseMove(e) {
+                const rect = document.getElementById('canvas-container').getBoundingClientRect();
+                const mouseX = (e.clientX - rect.left - AppState.panX) / AppState.zoom;
+                const mouseY = (e.clientY - rect.top - AppState.panY) / AppState.zoom;
+                tempConnectionLine.setAttribute('d', createCurvedPath(startPos, { x: mouseX, y: mouseY }));
+            }
+            
+            function onMouseUp(e) {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                if (tempConnectionLine) { tempConnectionLine.remove(); tempConnectionLine = null; }
+                
+                const target = e.target.closest('.connection-point');
+                if (target && connectionStart) {
+                    const targetNode = target.closest('.node');
+                    if (targetNode) {
+                        const targetNodeId = targetNode.dataset.nodeId;
+                        const targetPoint = target.dataset.point;
+                        if (targetNodeId !== connectionStart.nodeId) {
+                            createConnection(connectionStart.nodeId, connectionStart.point, targetNodeId, targetPoint);
+                        }
+                    }
+                }
+                connectionStart = null;
+            }
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        }
+
+        // Canvas Panning & Zooming
+        const canvasContainer = document.getElementById('canvas-container');
+
+        canvasContainer.addEventListener('mousedown', (e) => {
+            if (e.target === canvasContainer || e.target.classList.contains('grid-pattern')) {
+                AppState.isPanning = true;
+                AppState.lastMouseX = e.clientX; AppState.lastMouseY = e.clientY;
+                canvasContainer.classList.add('panning');
+                AppState.selectedNodes.clear(); AppState.selectedConnections.clear();
+                renderCanvas();
+            }
+        });
+
+        canvasContainer.addEventListener('mousemove', (e) => {
+            if (AppState.isPanning) {
+                const dx = e.clientX - AppState.lastMouseX;
+                const dy = e.clientY - AppState.lastMouseY;
+                AppState.panX += dx; AppState.panY += dy;
+                AppState.lastMouseX = e.clientX; AppState.lastMouseY = e.clientY;
+                renderCanvas(); updateMinimap();
+            }
+        });
+
+        canvasContainer.addEventListener('mouseup', () => { AppState.isPanning = false; canvasContainer.classList.remove('panning'); });
+        canvasContainer.addEventListener('mouseleave', () => { AppState.isPanning = false; canvasContainer.classList.remove('panning'); });
+
+        canvasContainer.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const rect = canvasContainer.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left, mouseY = e.clientY - rect.top;
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            const newZoom = Math.max(0.1, Math.min(5, AppState.zoom * zoomFactor));
+            const scaleChange = newZoom / AppState.zoom;
+            AppState.panX = mouseX - (mouseX - AppState.panX) * scaleChange;
+            AppState.panY = mouseY - (mouseY - AppState.panY) * scaleChange;
+            AppState.zoom = newZoom;
+            renderCanvas(); updateMinimap();
+        }, { passive: false });
+
+        function setZoom(level) { AppState.zoom = Math.max(0.1, Math.min(5, level)); renderCanvas(); updateMinimap(); }
+
+        function fitToScreen() {
+            if (AppState.nodes.length === 0) return;
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            AppState.nodes.forEach(node => {
+                minX = Math.min(minX, node.x); minY = Math.min(minY, node.y);
+                maxX = Math.max(maxX, node.x + node.width); maxY = Math.max(maxY, node.y + node.height);
+            });
+            const containerWidth = canvasContainer.clientWidth, containerHeight = canvasContainer.clientHeight;
+            const contentWidth = maxX - minX + 100, contentHeight = maxY - minY + 100;
+            AppState.zoom = Math.min(containerWidth / contentWidth, containerHeight / contentHeight, 1);
+            AppState.panX = (containerWidth - (maxX + minX) * AppState.zoom) / 2;
+            AppState.panY = (containerHeight - (maxY + minY) * AppState.zoom) / 2;
+            renderCanvas(); updateMinimap();
+        }
+
+        // Context Menu
+        const contextMenu = document.getElementById('context-menu');
+
+        function showContextMenu(x, y, type, id) {
+            contextMenu.style.display = 'block';
+            contextMenu.style.left = `${x}px`; contextMenu.style.top = `${y}px`;
+            contextMenu.dataset.type = type; contextMenu.dataset.id = id;
+        }
+
+        document.addEventListener('click', () => { contextMenu.style.display = 'none'; });
+
+        contextMenu.addEventListener('click', (e) => {
+            const item = e.target.closest('.context-menu-item');
+            if (!item) return;
+            const action = item.dataset.action, type = contextMenu.dataset.type, id = contextMenu.dataset.id;
+            switch(action) {
+                case 'duplicate': if (type === 'node') duplicateNode(id); break;
+                case 'delete': if (type === 'node') { AppState.selectedNodes.forEach(nodeId => deleteNode(nodeId)); } break;
+                case 'bring-front': if (type === 'node') { const node = AppState.nodes.find(n => n.id === id); if (node) node.zIndex = getMaxZIndex() + 1; renderCanvas(); saveState(); } break;
+                case 'send-back': if (type === 'node') { const node = AppState.nodes.find(n => n.id === id); if (node) node.zIndex = 0; renderCanvas(); saveState(); } break;
+            }
+        });
+
+        // Command Palette
+        const commandPalette = document.getElementById('command-palette');
+        const commandInput = document.getElementById('command-input');
+        const commandResults = document.getElementById('command-results');
+
+        const commands = [
+            { name: 'New Canvas', shortcut: 'Ctrl+N', action: () => newCanvas() },
+            { name: 'Save', shortcut: 'Ctrl+S', action: () => saveCanvas() },
+            { name: 'Export', shortcut: 'Ctrl+E', action: () => exportCanvas() },
+            { name: 'Import', shortcut: 'Ctrl+I', action: () => importCanvas() },
+            { name: 'Undo', shortcut: 'Ctrl+Z', action: () => undo() },
+            { name: 'Redo', shortcut: 'Ctrl+Y', action: () => redo() },
+            { name: 'Zoom In', shortcut: 'Ctrl++', action: () => setZoom(AppState.zoom * 1.2) },
+            { name: 'Zoom Out', shortcut: 'Ctrl+-', action: () => setZoom(AppState.zoom * 0.8) },
+            { name: 'Fit to Screen', shortcut: 'Ctrl+0', action: () => fitToScreen() },
+            { name: 'Toggle Dark Mode', shortcut: 'Ctrl+D', action: () => toggleTheme() },
+            { name: 'Delete Selected', shortcut: 'Del', action: () => deleteSelected() },
+            { name: 'Add Process Node', shortcut: 'P', action: () => addNodeAtCenter('process') },
+            { name: 'Add Decision Node', shortcut: 'D', action: () => addNodeAtCenter('decision') },
+            { name: 'Add Note', shortcut: 'N', action: () => addNodeAtCenter('note') }
+        ];
+
+        function showCommandPalette() {
+            commandPalette.classList.add('visible');
+            commandInput.value = ''; commandInput.focus();
+            renderCommandResults('');
+        }
+
+        function hideCommandPalette() { commandPalette.classList.remove('visible'); }
+
+        function renderCommandResults(query) {
+            commandResults.innerHTML = '';
+            const filtered = commands.filter(cmd => cmd.name.toLowerCase().includes(query.toLowerCase())).slice(0, 10);
+            filtered.forEach((cmd, index) => {
+                const item = document.createElement('div');
+                item.className = `command-result-item ${index === 0 ? 'selected' : ''}`;
+                item.innerHTML = `<span>${cmd.name}</span><span class="command-shortcut">${cmd.shortcut}</span>`;
+                item.addEventListener('click', () => { cmd.action(); hideCommandPalette(); });
+                commandResults.appendChild(item);
+            });
+        }
+
+        commandInput.addEventListener('input', (e) => { renderCommandResults(e.target.value); });
+        commandInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') hideCommandPalette();
+            else if (e.key === 'Enter') { const selected = commandResults.querySelector('.selected'); if (selected) selected.click(); }
+            else if (e.key === 'ArrowDown') { const items = commandResults.querySelectorAll('.command-result-item'); const selected = commandResults.querySelector('.selected'); const index = Array.from(items).indexOf(selected); if (selected && index < items.length - 1) { selected.classList.remove('selected'); items[index + 1].classList.add('selected'); } else if (items.length > 0) items[0].classList.add('selected'); }
+            else if (e.key === 'ArrowUp') { const items = commandResults.querySelectorAll('.command-result-item'); const selected = commandResults.querySelector('.selected'); const index = Array.from(items).indexOf(selected); if (selected && index > 0) { selected.classList.remove('selected'); items[index - 1].classList.add('selected'); } else if (items.length > 0) items[items.length - 1].classList.add('selected'); }
+        });
+
+        // Toolbar Actions
+        function newCanvas() {
+            if (confirm('Create a new canvas? Unsaved changes will be lost.')) {
+                AppState.nodes = []; AppState.connections = []; AppState.zoom = 1; AppState.panX = 0; AppState.panY = 0;
+                AppState.history = [{ nodes: [], connections: [], zoom: 1, panX: 0, panY: 0 }]; AppState.historyIndex = 0;
+                saveState(); renderCanvas(); updateMinimap(); showToast('New canvas created');
+            }
+        }
+
+        function saveCanvas() { autoSave(); showToast('Canvas saved'); }
+
+        function exportCanvas() {
+            const data = { nodes: AppState.nodes, connections: AppState.connections, zoom: AppState.zoom, panX: AppState.panX, panY: AppState.panY };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'workflow.json'; a.click();
+            URL.revokeObjectURL(url); showToast('Workflow exported');
+        }
+
+        function importCanvas() { document.getElementById('file-input').click(); }
+
+        function deleteSelected() {
+            AppState.selectedNodes.forEach(nodeId => deleteNode(nodeId));
+            AppState.selectedConnections.forEach(connId => deleteConnection(connId));
+        }
+
+        function addNodeAtCenter(type) {
+            const container = document.getElementById('canvas-container');
+            const centerX = (-AppState.panX + container.clientWidth / 2) / AppState.zoom;
+            const centerY = (-AppState.panY + container.clientHeight / 2) / AppState.zoom;
+            createNode(type, centerX - 100, centerY - 50);
+        }
+
+        // Button Listeners
+        document.getElementById('btn-new').addEventListener('click', newCanvas);
+        document.getElementById('btn-save').addEventListener('click', saveCanvas);
+        document.getElementById('btn-export').addEventListener('click', exportCanvas);
+        document.getElementById('btn-import').addEventListener('click', importCanvas);
+        document.getElementById('btn-undo').addEventListener('click', undo);
+        document.getElementById('btn-redo').addEventListener('click', redo);
+        document.getElementById('btn-zoom-in').addEventListener('click', () => setZoom(AppState.zoom * 1.2));
+        document.getElementById('btn-zoom-out').addEventListener('click', () => setZoom(AppState.zoom * 0.8));
+        document.getElementById('btn-zoom-fit').addEventListener('click', fitToScreen);
+        document.getElementById('btn-theme').addEventListener('click', toggleTheme);
+        document.getElementById('zoom-plus').addEventListener('click', () => setZoom(AppState.zoom * 1.2));
+        document.getElementById('zoom-minus').addEventListener('click', () => setZoom(AppState.zoom * 0.8));
+        document.getElementById('zoom-reset').addEventListener('click', () => setZoom(1));
+
+        document.querySelectorAll('.node-type-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const type = btn.dataset.type;
+                const container = document.getElementById('canvas-container');
+                const x = (-AppState.panX + container.clientWidth / 2) / AppState.zoom - 100;
+                const y = (-AppState.panY + container.clientHeight / 2) / AppState.zoom - 50;
+                createNode(type, x, y);
+            });
+        });
+
+        document.getElementById('btn-add-image').addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file'; input.accept = 'image/*';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const container = document.getElementById('canvas-container');
+                        const x = (-AppState.panX + container.clientWidth / 2) / AppState.zoom - 150;
+                        const y = (-AppState.panY + container.clientHeight / 2) / AppState.zoom - 100;
+                        createNode('image', x, y, { width: 300, height: 200, content: event.target.result });
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+            input.click();
+        });
+
+        document.getElementById('btn-add-text').addEventListener('click', () => { addNodeAtCenter('text'); });
+
+        document.getElementById('btn-help').addEventListener('click', () => {
+            alert('Keyboard Shortcuts:\n\nCtrl+N - New Canvas\nCtrl+S - Save\nCtrl+E - Export\nCtrl+I - Import\nCtrl+Z - Undo\nCtrl+Y - Redo\nCtrl+D - Toggle Dark Mode\nCtrl++ - Zoom In\nCtrl+- - Zoom Out\nCtrl+0 - Fit to Screen\nCtrl+K - Command Palette\nDelete - Delete Selected\nP - Add Process Node\nD - Add Decision Node\nN - Add Note\n\nMouse:\n- Drag from empty space to pan\n- Scroll to zoom\n- Click and drag nodes to move\n- Drag from connection points to connect\n- Right-click for context menu');
+        });
+
+        document.getElementById('file-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                if (file.type === 'application/json' || file.name.endsWith('.json')) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const data = JSON.parse(event.target.result);
+                            AppState.nodes = data.nodes || []; AppState.connections = data.connections || [];
+                            AppState.zoom = data.zoom || 1; AppState.panX = data.panX || 0; AppState.panY = data.panY || 0;
+                            saveState(); renderCanvas(); updateMinimap(); showToast('Workflow imported');
+                        } catch (err) { showToast('Error importing file'); }
+                    };
+                    reader.readAsText(file);
+                } else if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const container = document.getElementById('canvas-container');
+                        const x = (-AppState.panX + container.clientWidth / 2) / AppState.zoom - 150;
+                        const y = (-AppState.panY + container.clientHeight / 2) / AppState.zoom - 100;
+                        createNode('image', x, y, { width: 300, height: 200, content: event.target.result });
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+            e.target.value = '';
+        });
+
+        // Property Panel
+        function updatePropertiesPanel() {
+            if (AppState.selectedNodes.size === 1) {
+                const nodeId = Array.from(AppState.selectedNodes)[0];
+                const node = AppState.nodes.find(n => n.id === nodeId);
+                if (node) {
+                    document.getElementById('prop-bg-color').value = node.backgroundColor || '#ffffff';
+                    document.getElementById('prop-opacity').value = node.opacity || 100;
+                    document.getElementById('prop-radius').value = node.borderRadius || 12;
+                    document.getElementById('prop-font-size').value = node.fontSize || 14;
+                    document.getElementById('prop-text-color').value = node.textColor || '#000000';
+                }
+            }
+        }
+
+        document.getElementById('prop-bg-color').addEventListener('input', (e) => {
+            AppState.selectedNodes.forEach(nodeId => { const node = AppState.nodes.find(n => n.id === nodeId); if (node) node.backgroundColor = e.target.value; });
+            saveState(); renderCanvas();
+        });
+        document.getElementById('prop-opacity').addEventListener('input', (e) => {
+            AppState.selectedNodes.forEach(nodeId => { const node = AppState.nodes.find(n => n.id === nodeId); if (node) node.opacity = parseInt(e.target.value); });
+            saveState(); renderCanvas();
+        });
+        document.getElementById('prop-radius').addEventListener('input', (e) => {
+            AppState.selectedNodes.forEach(nodeId => { const node = AppState.nodes.find(n => n.id === nodeId); if (node) node.borderRadius = parseInt(e.target.value); });
+            saveState(); renderCanvas();
+        });
+        document.getElementById('prop-font-size').addEventListener('input', (e) => {
+            AppState.selectedNodes.forEach(nodeId => { const node = AppState.nodes.find(n => n.id === nodeId); if (node) node.fontSize = parseInt(e.target.value); });
+            saveState(); renderCanvas();
+        });
+        document.getElementById('prop-text-color').addEventListener('input', (e) => {
+            AppState.selectedNodes.forEach(nodeId => { const node = AppState.nodes.find(n => n.id === nodeId); if (node) node.textColor = e.target.value; });
+            saveState(); renderCanvas();
+        });
+        document.getElementById('btn-delete').addEventListener('click', deleteSelected);
+
+        // Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                if (e.key === 'Escape') { hideCommandPalette(); e.target.blur(); }
+                return;
+            }
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key.toLowerCase()) {
+                    case 'n': e.preventDefault(); newCanvas(); break;
+                    case 's': e.preventDefault(); saveCanvas(); break;
+                    case 'e': e.preventDefault(); exportCanvas(); break;
+                    case 'i': e.preventDefault(); importCanvas(); break;
+                    case 'z': e.preventDefault(); undo(); break;
+                    case 'y': e.preventDefault(); redo(); break;
+                    case 'k': e.preventDefault(); showCommandPalette(); break;
+                    case 'd': e.preventDefault(); toggleTheme(); break;
+                    case '=': case '+': e.preventDefault(); setZoom(AppState.zoom * 1.2); break;
+                    case '-': e.preventDefault(); setZoom(AppState.zoom * 0.8); break;
+                    case '0': e.preventDefault(); fitToScreen(); break;
+                }
+            } else {
+                switch(e.key) {
+                    case 'Delete': case 'Backspace': deleteSelected(); break;
+                    case 'p': addNodeAtCenter('process'); break;
+                    case 'd': addNodeAtCenter('decision'); break;
+                    case 'n': addNodeAtCenter('note'); break;
+                    case 'Escape': AppState.selectedNodes.clear(); AppState.selectedConnections.clear(); renderCanvas(); break;
+                }
+            }
+        });
+
+        // Ripple Effect
+        document.querySelectorAll('.btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                const ripple = document.createElement('span');
+                ripple.className = 'ripple';
+                const rect = this.getBoundingClientRect();
+                const size = Math.max(rect.width, rect.height);
+                ripple.style.width = ripple.style.height = size + 'px';
+                ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+                ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+                this.appendChild(ripple);
+                setTimeout(() => ripple.remove(), 600);
+            });
+        });
+
+        // Initialization
+        async function init() {
+            const progressBar = document.getElementById('loading-progress-bar');
+            const loadingScreen = document.getElementById('loading-screen');
+            
+            for (let i = 0; i <= 100; i += 10) {
+                progressBar.style.width = i + '%';
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            
+            loadState();
+            const savedTheme = localStorage.getItem('workflow_canvas_theme');
+            if (savedTheme) setTheme(savedTheme);
+            
+            renderCanvas(); updateMinimap();
+            
+            setTimeout(() => {
+                loadingScreen.style.opacity = '0';
+                setTimeout(() => loadingScreen.remove(), 300);
+            }, 500);
+            
+            showToast('Welcome to Workflow Canvas!');
+        }
+
+        init();
+    </script>
+</body>
+</html>
